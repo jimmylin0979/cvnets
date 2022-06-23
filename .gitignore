@@ -2,6 +2,11 @@
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,pythonvanilla,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,pythonvanilla,python
 
+### Saved ###
+saved/
+
+### Dataset ###
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -192,6 +197,7 @@ cython_debug/
 
 
 ### VisualStudioCode ###
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
