@@ -3,8 +3,8 @@ common:
     auto_resume: true
     mix_precision: true
 dataset:
-    root_train: "path/train"
-    root_eval: "path/test"
+    root_train: "./path/train"
+    root_eval: "./path/test"
     name: "dataset name"
     train_valid_split: 0.2
     train_batch_size: 16
@@ -12,19 +12,21 @@ dataset:
     num_workers: 0
     pin_memory: true
 mix:
-    name: ["mixup", "cutmix"]
+    # name: ["mixup", "cutmix"]
+    prob: 0.2
+    cutmix_beta: 1.0
 scheduler:
     name: "cosine"
     max_epoch: 100
     tmax: 100
-    warmup_init_lr: 0.00005
+    lr: 0.00005
     warmup_epoch: 5
     earlystop_epoch: 600
 model:
-    model_name: "swin_transformer"
+    model_name: "Swin_Transformer"
     pretrained_model: "microsoft/swin-base-patch4-window7-224"
-    img_size: 384
-    n_classes: 219
+    input_size: 384
+    n_classes: 1000
 ema:
     enable: true
     momentum: 0.0005
