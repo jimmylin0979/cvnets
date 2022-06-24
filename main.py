@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AICUP - Orchid Classifier')
     parser.add_argument('--mode', '-m', default='train', type=str, required=True,
                                 help='Selecting whether to train or to evaluate')
-    parser.add_argument('--logdir', default='model', type=str, required=True,
+    parser.add_argument('--logdir', '-lg', default='model', type=str, required=True,
                                 help='The folder to store the training stats of current model')
     args = parser.parse_args()
 

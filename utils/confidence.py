@@ -3,9 +3,6 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-#
-from config import DefualtConfig
-
 
 def get_confidence_score(model, loader, topN=5, use_gpu_index='-1', batch_size=32, outpu_file_path='./prediction-Confidence.csv'):
     '''

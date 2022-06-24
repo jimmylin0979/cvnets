@@ -1,6 +1,8 @@
 #
+from cProfile import label
 import torch
 import torch.nn as nn
+from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -21,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 import models
 from data.dataset.ImageLabelDataSet import ImageLabelDataSet
 from optim.scheduler import GradualWarmupScheduler
+import utils.mix as mix
 from Configure import Configure
 
 ###################################################################################
@@ -136,7 +139,7 @@ def main_train(config : Configure, logdir : str):
         valid_loader = DataLoader(ds_valid, batch_size=config.dataset.train_batch_size, shuffle=False, num_workers=config.dataset.num_workers, pin_memory=True)
 
         # 
-        train_acc, train_loss = train(model, train_loader, criterion, optimizer, ema)
+        train_acc, train_loss = train(model, train_loader, criterion, optimizer, ema, config)
         logging.info(f"[ Train | {epoch + 1:03d}/{config.scheduler.max_epoch:03d} ] loss = {train_loss:.5f}, acc = {train_acc:.5f}")
 
         valid_acc, valid_loss = valid(model, valid_loader, criterion, None)
@@ -220,7 +223,7 @@ def get_train_valid_ds(config : Configure, ds):
 
 ###################################################################################
 
-def train(model, train_loader, criterion, optimizer, ema):
+def train(model, train_loader, criterion, optimizer, ema, config):
     
     '''
     @ Params:
@@ -248,12 +251,61 @@ def train(model, train_loader, criterion, optimizer, ema):
         imgs, labels = batch
         imgs = imgs.to(device)
 
+        # 
+        # Now supports cutmix, mixup 2 mix-based augmetations
+        do_mix = True if np.random.rand(1) < config.mix.prob else False
+        mix_method = 'cutmix' if np.random.rand(1) > 0.5 else 'mixup'
+        #
+        target_a, target_b, lam = None, None, None
+        if do_mix:
+            # preparation for cutmix
+            if mix_method == 'cutmix':
+                
+                # generate mixed sample
+                lam = np.random.beta(config.mix.cutmix_beta, config.mix.cutmix_beta)
+                if torch.cuda.is_available():
+                    rand_index = torch.randperm(imgs.size()[0]).cuda()
+                else:
+                    rand_index = torch.randperm(imgs.size()[0]).cpu()        
+                target_a = labels
+                target_b = labels[rand_index]
+                bbx1, bby1, bbx2, bby2 = mix.rand_bbox(imgs.size(), lam)
+                imgs[:, :, bbx1:bbx2, bby1:bby2] = imgs[rand_index, :, bbx1:bbx2, bby1:bby2]
+                
+                # adjust lambda to exactly match pixel ratio
+                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (imgs.size()[-1] * imgs.size()[-2]))
+            
+            # preparation for mixup
+            elif mix_method == 'mixup':
+                labels = labels.to(device)
+                imgs, targets_a, targets_b, lam = mix.mixup_data(imgs, labels, alpha=0.2, use_cuda=torch.cuda.is_available())
+                imgs, targets_a, targets_b = map(Variable, (imgs, targets_a, targets_b))
+        
+        else:
+            labels = labels.to(device)
+
+        if do_mix:
+            logging.debug(f'current mixed method : {mix_method}')
+
         # Forward the data. (Make sure data and model are on the same device.)
         logits = model(imgs.to(device))
 
         # Calculate the cross-entropy loss.
         # We don't need to apply softmax before computing cross-entropy as it is done automatically.
-        loss = criterion(logits, labels.to(device))
+        loss = None 
+        #
+        if do_mix:
+            #
+            if mix_method == 'mixup':
+                loss = mix.mixup_criterion(criterion, logits, targets_a, targets_b, lam)
+
+            #
+            elif mix_method == 'cutmix':
+                target_a = target_a.to(device)
+                target_b = target_b.to(device)
+                loss = criterion(logits, target_a) * lam + criterion(logits, target_b) * (1. - lam)
+        else:
+            loss = criterion(logits, labels.to(device))
 
         # Gradients stored in the parameters in the previous step should be cleared out first.
         optimizer.zero_grad()
