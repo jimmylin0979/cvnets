@@ -5,7 +5,7 @@
 -   [x] Add mixed-based augmentation into training process
 -   [ ] Auto-resume training
 -   [ ] Explanable AI
--   [ ]
+-   [ ] Continue
 
 ## Usage
 
@@ -31,3 +31,8 @@ Please check the config.yaml first to customize your network.
 `python main.py --mode eval --logdir <folder-name>`
 
 ## Reference
+
+1. Gradual Warmup LR Scheduler: https://github.com/ildoonet/pytorch-gradual-warmup-lr
+2. CutMix : https://github.com/clovaai/CutMix-PyTorch
+3. Mixup : https://github.com/hongyi-zhang/mixup
+4.
