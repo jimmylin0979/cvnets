@@ -3,7 +3,7 @@
 ## TODOs
 
 -   [x] Add mixed-based augmentation into training process
--   [ ] Auto-resume training
+-   [x] Auto-resume training
 -   [ ] Explanable AI
 -   [ ] Continue
 

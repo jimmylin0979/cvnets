@@ -19,11 +19,15 @@ from tqdm import tqdm
 import logging
 logging.basicConfig(level=logging.INFO)
 
+#
+import os
+
 # Local package
 import models
 from data.dataset.ImageLabelDataSet import ImageLabelDataSet
 from optim.scheduler import GradualWarmupScheduler
 import utils.mix as mix
+from utils.checkpoint_utils import save_checkpoint, load_checkpoint
 from Configure import Configure
 
 ###################################################################################
@@ -46,15 +50,15 @@ def main_train(config : Configure, logdir : str):
     '''
 
     # Step 1 : prepare logging writer
-    writer = SummaryWriter(log_dir=f'./saved/{logdir}')
+    is_required_to_resume = False
+    if os.path.exists(f'./saved/{logdir}/checkpoint.pth'):
+        is_required_to_resume = True
+    writer = SummaryWriter(log_dir=f'./saved/{logdir}/tb_logs')
 
     # Step 2 : 
-    logging.info(config.model.model_name)
+    logging.info(f'Model : {config.model.model_name}')
     model = getattr(models, config.model.model_name)(config)
-    # TODO : Implement auto reseum
-    # if config.load_model:
-    #     model.load_state_dict(torch.load(config.model_path))
-    
+
     # 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -101,10 +105,8 @@ def main_train(config : Configure, logdir : str):
     # 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.scheduler.lr, weight_decay=1e-8)
 
+    # 
     ema = ExponentialMovingAverage(model.parameters(), decay=0.995)
-    # TODO : Implement Auto resume
-    # if config.load_model:
-    #     ema = ema.load_state_dict(torch.load(config.ema_path))
 
     # scheduler_warmup is chained with schduler_steplr
     scheduler_steplr = CosineAnnealingLR(optimizer, T_max=config.scheduler.tmax)
@@ -124,8 +126,14 @@ def main_train(config : Configure, logdir : str):
     optimizer.zero_grad()
     optimizer.step()
 
+    # Auto-resume, continue from the previous interrupt training 
+    # get start_epoch, reload weight into model & optimizer, .. and so on 
+    prev_epoch = -1
+    if config.common.auto_resume and is_required_to_resume:
+        prev_epoch, model, ema, optimizer = load_checkpoint(model, ema, optimizer, logdir)
+
     # 
-    for epoch in range(config.scheduler.max_epoch):
+    for epoch in range(prev_epoch + 1, config.scheduler.max_epoch):
 
         # update the learning rate before each epoch
         scheduler_warmup.step(epoch + 1)
@@ -174,6 +182,9 @@ def main_train(config : Configure, logdir : str):
             nonImprove_epochs = 0
         else:
             nonImprove_epochs += 1
+
+        # Save current model in case of training interrupting 
+        save_checkpoint(epoch, model, ema, optimizer, logdir)
 
         # Stop training if your model stops improving for "config['early_stop']" epochs.    
         if nonImprove_epochs >= config.scheduler.earlystop_epoch:
